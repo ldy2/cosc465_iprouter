@@ -165,9 +165,17 @@ class Router(object):
                         srcMAC = devMAC
                         self.MACaddresses[srcIP] = dstMAC                           #add newly MAC address to mac dictionary
                         packetObject = self.queue[srcIP]                            #temporarily store packet ]
-                        pkt = packetObject.pkt
-                        packet = self.create_eth_header(pkt, dstMAC, srcMAC)        #add ethernet header to packet
-                        self.net.send_packet(dev,packet)                      
+                        if packetObject.ICMP == None:                                #if the packet is an IPv4 packet
+                            pkt = packetObject.pkt
+                            packet = self.create_eth_header(pkt, dstMAC, srcMAC)        #add ethernet header to packet
+                            self.net.send_packet(dev,packet)
+                        elif packetObject.ICMP != None:                             #if packet is a ICMP packet
+                            print "Sending reply ping on:   ", dev
+                            print "sending reply ping packet:   ", pkt
+                            pkt = packetObject.pkt
+                            #debugger()
+                            packet = self.create_eth_header(pkt, dstMAC, srcMAC)        #add ethernet header to packet
+                            self.net.send_packet(dev,packet)                
                         del self.queue[srcIP]                                       #delte packeet from queue                 
 
                 else:
@@ -222,29 +230,28 @@ class Router(object):
                             print "bestKey:    ", bestKey                           
                             #send back to place you just got from
 
+                            #might need to handle case where next HOP is none
 
-                            if dstIP in self.MACaddresses:                  #if we know MAC address
-                                #can send ping reply directly                                
-                                print "YAY"
-                            else:                                           # if we don't know MAC address
-                                #need to get MAC address to send ping reply to
-                                print "SHIT"
-                                IPinfo = self.forwardingTable[bestKey]
-                                print IPinfo
-                                packetObject = packets()
-                                packetObject.pkt = pkt
-                                packetObject.ip_header = ip_header
-                                packetObject.lastSend = time.time()
-                                self.queue[dstIP] = packetObject 
-                                print "dstIP:    ", srcIP
-                                packetArp = self.create_arp_request(ip_header, packetObject, IPinfo, dstIP)   #creates packet 
-                                dev = IPinfo[2]                                                     #dev is the interface to send o
-                                print "dev sending out on:   ", dev
-                                packetObject.dev = dev
-                                print "packetObject:    ", packetObject
-                                print "packet:     ", packetArp
-                                self.net.send_packet(dev,packetArp)                                    #send request
-                                print "packet sent!"
+                            if self.forwardingTable[bestKey][1]!=None:          #next HOP is not None 
+                                if dstIP in self.MACaddresses:                  #if we know MAC address
+                                    #can send ping reply directly                                
+                                    print "YAY"
+                                else:                                           # if we don't know MAC address
+                                    #need to get MAC address to send ping reply to
+                                    print "Test 4"
+                                    IPinfo = self.forwardingTable[bestKey]
+                                    nextHopIP = self.forwardingTable[bestKey][1]
+                                    nextHopDev = self.forwardingTable[bestKey][2]
+                                    packetObject = packets()
+                                    packetObject.pkt = pkt
+                                    packetObject.ip_header = ipreply
+                                    packetObject.lastSend = time.time()
+                                    packetObject.ICMP = ipreply
+                                    self.queue[nextHopIP] = packetObject
+                                    #debugger()
+                                    packet = self.create_arp_request(ip_header, packetObject, IPinfo, nextHopIP)   
+                                    packetObject.dev = IPinfo[2]
+                                    self.net.send_packet(packetObject.dev, packetObject.ARP_request)              #send request     
                             
                             """print "sending packet on:   ", dev
                             self.net.send_packet(dev,ipreply)
@@ -340,6 +347,7 @@ class packets:
         self.ARP_request = None
         self.dev = None
         self.lastSend = None
+        self.ICMP = None
 
 
 
