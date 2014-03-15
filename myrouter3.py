@@ -172,9 +172,11 @@ class Router(object):
                         elif packetObject.ICMP != None:                             #if packet is a ICMP packet
                             print "Sending reply ping on:   ", dev
                             print "sending reply ping packet:   ", pkt
-                            pkt = packetObject.pkt
+                            print "sending following ICMP packet:    ", packetObject.ICMP
+                            print "IP header:    ", packetObject.ip_header
+                            #pkt = packetObject.pkt
                             #debugger()
-                            packet = self.create_eth_header(pkt, dstMAC, srcMAC)        #add ethernet header to packet
+                            packet = self.create_eth_header(packetObject.ICMP, dstMAC, srcMAC)        #add ethernet header to packet
                             self.net.send_packet(dev,packet)                
                         del self.queue[srcIP]                                       #delte packeet from queue                 
 
@@ -246,12 +248,14 @@ class Router(object):
                                     packetObject.pkt = pkt
                                     packetObject.ip_header = ipreply
                                     packetObject.lastSend = time.time()
-                                    packetObject.ICMP = ipreply
+                                    packetObject.ICMP = icmppkt
                                     self.queue[nextHopIP] = packetObject
                                     #debugger()
                                     packet = self.create_arp_request(ip_header, packetObject, IPinfo, nextHopIP)   
                                     packetObject.dev = IPinfo[2]
                                     self.net.send_packet(packetObject.dev, packetObject.ARP_request)              #send request     
+                                    
+
                             
                             """print "sending packet on:   ", dev
                             self.net.send_packet(dev,ipreply)
