@@ -169,14 +169,14 @@ class Router(object):
                             pkt = packetObject.pkt
                             packet = self.create_eth_header(pkt, dstMAC, srcMAC)        #add ethernet header to packet
                             self.net.send_packet(dev,packet)
-                        elif packetObject.ICMP != None:                             #if packet is a ICMP packet
+                        elif packetObject.ICMP == True:                             #if packet is a ICMP packet
                             print "Sending reply ping on:   ", dev
                             print "sending reply ping packet:   ", pkt
                             print "sending following ICMP packet:    ", packetObject.ICMP
                             print "IP header:    ", packetObject.ip_header
                             #pkt = packetObject.pkt
                             #debugger()
-                            packet = self.create_eth_header(packetObject.ICMP, dstMAC, srcMAC)        #add ethernet header to packet
+                            packet = self.create_eth_header(packetObject.ip_header, dstMAC, srcMAC)        #add ethernet header to packet
                             self.net.send_packet(dev,packet)                
                         del self.queue[srcIP]                                       #delte packeet from queue                 
 
@@ -188,9 +188,26 @@ class Router(object):
                 ip_header = pkt.find("ipv4")
                 if ip_header != None:                                                   #if IPv4packet! 
                     #AF NEW!
-                    if ip_header.ttl == 0:                                               #AF: if TTL value is 0
+                    if ip_header.ttl == 1:                                               #AF: if TTL value is 0
                         print "ICMP time exceeded erro should be sent!"
-                        break                                                           #AF: not sure this is correct! 
+                        #create IP reply
+                        ipreply = pkt.ipv4()
+                        interface = self.net.interface_by_name(dev)
+                        devIP = interface.ipaddr 
+                        ipreply.srcip = devIP #should be an address on the router's interface that received the packet
+                        ipreply.dstip = pkt.srcip() # send back to source of packet that had TTL of 1
+                        ipreply.ttl = 64
+
+                        #create ICMPpkt
+                        icmppkt = pkt.icmp()
+                        icmppkt.type = pkt.TYPE_TIME_EXCEED
+                        icmppkt.payload = pkt.uncreach()
+                        icmppkt.payload.payload = pkt.dump()[:28]
+
+                        #link the two
+                        ipreply.payload = icmppkt
+                        self.icmpError(ipreply, pkt, dev, net,ip_header) #send
+
                     ip_header.ttl -= 1
                     dstIP = ip_header.dstip                                             #destination IP addr of IPheader
                     
@@ -206,7 +223,7 @@ class Router(object):
                         #debugger()
                         icmp_header = pkt.find("icmp")
                         print "ICMP_header:   ", icmp_header
-                        if icmp_header != None:
+                        if icmp_header != None: #need this to check if ping...not just ICMP
                             print "WTF 3"
                             oldPing = icmp_header.payload
                             #creat ICMP reply to send out
@@ -215,9 +232,10 @@ class Router(object):
                             ping = pktlib.echo()
                             ping.id = oldPing.id 
                             ping.seq = oldPing.seq 
-
+                            ping.payload = oldPing.payload
                             icmppkt.payload = ping
-                 
+                            print "original ping id:   ", oldPing.id
+                            print "original Ping seq:   ", oldPing.seq
                             #create IP header
                             ipreply = pktlib.ipv4()
                             ipreply.srcip = devIP
@@ -226,40 +244,9 @@ class Router(object):
                             ipreply.payload = icmppkt
                             print "sending PING reply from:  ", ipreply.srcip
                             print "sending PING reply to:    ", ipreply.dstip
+                            self.icmpError(ipreply, pkt, dev, self.net, ip_header)
 
-                            bestKey = self.in_forwarding_table(ipreply)
  
-                            print "bestKey:    ", bestKey                           
-                            #send back to place you just got from
-
-                            #might need to handle case where next HOP is none
-
-                            if self.forwardingTable[bestKey][1]!=None:          #next HOP is not None 
-                                if dstIP in self.MACaddresses:                  #if we know MAC address
-                                    #can send ping reply directly                                
-                                    print "YAY"
-                                else:                                           # if we don't know MAC address
-                                    #need to get MAC address to send ping reply to
-                                    print "Test 4"
-                                    IPinfo = self.forwardingTable[bestKey]
-                                    nextHopIP = self.forwardingTable[bestKey][1]
-                                    nextHopDev = self.forwardingTable[bestKey][2]
-                                    packetObject = packets()
-                                    packetObject.pkt = pkt
-                                    packetObject.ip_header = ipreply
-                                    packetObject.lastSend = time.time()
-                                    packetObject.ICMP = icmppkt
-                                    self.queue[nextHopIP] = packetObject
-                                    #debugger()
-                                    packet = self.create_arp_request(ip_header, packetObject, IPinfo, nextHopIP)   
-                                    packetObject.dev = IPinfo[2]
-                                    self.net.send_packet(packetObject.dev, packetObject.ARP_request)              #send request     
-                                    
-
-                            
-                            """print "sending packet on:   ", dev
-                            self.net.send_packet(dev,ipreply)
-                            print "packet sent!"""
 
                     #print packet not sent to me------------------------------------------
                     else:                                                                   #if packet is not for me
@@ -330,8 +317,40 @@ class Router(object):
                             pass
 
                               
-                
+    def icmpError(self, ipreply, pkt, dev, net, ip_header):
+        #used to send ICMPerrors
                     
+        bestKey = self.in_forwarding_table(ipreply)
+
+        print "bestKey:    ", bestKey                           
+        #send back to place you just got from
+
+        #might need to handle case where next HOP is none
+        #debugger()
+        dstIP = ipreply.dstip
+        if self.forwardingTable[bestKey][1]!=None:          #next HOP is not None 
+            if dstIP in self.MACaddresses:                  #if we know MAC address
+                #can send ping reply directly                                
+                print "YAY"
+            else:                                           # if we don't know MAC address
+                #need to get MAC address to send ping reply to
+                print "Test 4"
+                IPinfo = self.forwardingTable[bestKey]
+                nextHopIP = self.forwardingTable[bestKey][1]
+                nextHopDev = self.forwardingTable[bestKey][2]
+                packetObject = packets()
+                packetObject.pkt = pkt
+                packetObject.ip_header = ipreply
+                packetObject.lastSend = time.time()
+                packetObject.ICMP = True
+                self.queue[nextHopIP] = packetObject
+                #debugger()
+                packet = self.create_arp_request(ip_header, packetObject, IPinfo, nextHopIP)   
+                packetObject.dev = IPinfo[2]
+                print "Sending ARP request"
+                self.net.send_packet(packetObject.dev, packetObject.ARP_request)              #send request    
+                print "sent ARP request" 
+                                  
 
 def srpy_main(net):
     '''
