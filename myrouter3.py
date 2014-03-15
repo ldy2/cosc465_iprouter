@@ -242,6 +242,8 @@ class Router(object):
                             ipreply.dstip = srcIP
                             ipreply.ttl = 64
                             ipreply.payload = icmppkt
+                            #debugger()
+                            ipreply.protocol = 1  #have no idea if this is correct
                             print "sending PING reply from:  ", ipreply.srcip
                             print "sending PING reply to:    ", ipreply.dstip
                             self.icmpError(ipreply, pkt, dev, self.net, ip_header)
