@@ -123,7 +123,7 @@ class Router(object):
             except SrpyNoPackets:
                 #log_debug("Timeout waiting for packets")
                 toDel = []
-                for key in self.queue:                                                          #iterate packetObjects in the queue
+                for key in self.queue:                                            #iterate packetObjects in the queue
                     packetObject = self.queue[key]
                     if (time.time() - packetObject.lastSend) > 1:                                 
                         if packetObject.retries != 0:                                           #if retries are 0
@@ -177,6 +177,7 @@ class Router(object):
                             #pkt = packetObject.pkt
                             #debugger()
                             packet = self.create_eth_header(packetObject.ip_header, dstMAC, srcMAC)        #add ethernet header to packet
+                            packet.payload = packetObject.ip_header
                             self.net.send_packet(dev,packet)                
                         del self.queue[srcIP]                                       #delte packeet from queue                 
 
@@ -241,7 +242,7 @@ class Router(object):
                             ipreply.srcip = devIP
                             ipreply.dstip = srcIP
                             ipreply.ttl = 64
-                            ipreply.payload = icmppkt
+                            ipreply.payload = icmppkt  #############
                             #debugger()
                             ipreply.protocol = 1  #have no idea if this is correct
                             print "sending PING reply from:  ", ipreply.srcip
