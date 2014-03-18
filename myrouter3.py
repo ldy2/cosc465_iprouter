@@ -26,7 +26,6 @@ class Router(object):
         for intf in self.net.interfaces():                  #loop to go through interfaces 
             self.ip_eth_dict[intf.ipaddr] = intf.ethaddr    #adds IP addr (key) to eth addr (value)
 
-
     #checking that the ethernet address source = an IP address on router    
     def addr_check(self, header): 
         dst = header.protodst                               #set variable dst                     
@@ -111,8 +110,6 @@ class Router(object):
                     bestKey = key
         return bestKey
 
-
-
     def router_main(self):
         self.readfile()
         self.interfaces()
@@ -157,8 +154,6 @@ class Router(object):
                             #link the two
                             ipreply.protocol = ipreply.ICMP_PROTOCOL
                             ipreply.set_payload(icmppkt)
-
-
 
                             toDel.append(key)
                             
@@ -283,10 +278,6 @@ class Router(object):
                             ipreply.set_payload(icmppkt)
 
                             self.icmpError(ipreply, pkt, dev, self.net,ip_header)
-                            
-
-      
- 
 
                     #print packet not sent to me------------------------------------------
                     else:                                                                   #if packet is not for me
@@ -327,7 +318,6 @@ class Router(object):
                                     packet = self.create_eth_header(pkt, dstMAC, srcMAC)                #creates new packet to send
                                     dev = self.forwardingTable[bestKey][2]                              #gets netinterface name for dstIP
                                     self.net.send_packet(packetObject.dev, packetObject.ARP_request)    #sends IPv4packet 
-
                                    
                                 else:                                                               #If don't know MAC address
                                     if icmpError:
@@ -367,9 +357,6 @@ class Router(object):
 
                             #print "entering ICMP Error area"		
                             self.icmpError(ipreply, pkt, dev, self.net,ip_header)
-                            
-
-     
                               
     def icmpError(self, ipreply, pkt, dev, net, ip_header):
         bestKey = self.in_forwarding_table(ipreply)
@@ -425,10 +412,6 @@ class Router(object):
                     packet.payload.hwsrc = pkt.dst
                     packetObject.dev = IPinfo[2]
                     self.net.send_packet(packetObject.dev, packetObject.ARP_request)              #send request
-                   
-
-
-
 
 def srpy_main(net):
     '''
@@ -451,9 +434,4 @@ class packets:
         self.ICMP = False
         self.dstMAC = None
         self.srcMAC = None
-
-
-
-
-
 
