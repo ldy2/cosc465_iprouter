@@ -11,6 +11,8 @@ import time
 sys.path.append(os.path.join(os.environ['HOME'],'pox'))
 sys.path.append(os.path.join(os.getcwd(),'pox'))
 import pox.lib.packet as pktlib
+import firewallrules.py
+
 from pox.lib.packet import ethernet,ETHER_BROADCAST,IP_ANY
 from pox.lib.packet import arp
 from pox.lib.addresses import EthAddr,IPAddr,netmask_to_cidr
@@ -113,7 +115,9 @@ class Router(object):
     def router_main(self):
         self.readfile()
         self.interfaces()
-
+    
+        firewallrules.import_rules()        
+        
         while True:
             try:
                 dev,ts,pkt = self.net.recv_packet(timeout=1.0)

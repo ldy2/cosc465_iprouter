@@ -1,8 +1,5 @@
 #!/bin/bash
 
-export USER_MODULE=myrouter
-export TEST_MODULE=routertests1.srpy
-
 args=`getopt c $*`
 
 if [ $? != 0 ]; then
@@ -15,7 +12,6 @@ if [[ $args == " -c --" ]]; then
     rm -rf pox
     rm -rf srpy
     rm -f *.pyc
-    rm -f runreal.sh runtests.sh
     exit
 fi
 echo "Doing setup."
@@ -35,20 +31,3 @@ else
     git pull
     cd ..
 fi
-
-(
-cat <<EOF
-#!/bin/bash
-python ./srpy/srpy.py \$@ $USER_MODULE
-EOF
-) > runreal.sh
-chmod +x ./runreal.sh
-
-(
-cat <<EOF
-#!/bin/bash
-python ./srpy/srpy.py \$@ -t -s $TEST_MODULE $USER_MODULE
-EOF
-) > runtests.sh
-chmod +x ./runtests.sh
-
