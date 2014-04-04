@@ -28,9 +28,7 @@ class Rules(object):
 
         self.netMask = None
         self.bucket = None
-        
-        self.yes = None  #I don't know what this is and don't use it anywhere
-        
+
 
 class Firewall(object):
     def __init__(self):
@@ -53,25 +51,37 @@ class Firewall(object):
                         if words[idx] == "deny":
                             ruleObject.action = "deny"
                         if words[idx] == "ip":
-                            ruleObject.type = "ip"
+                            ruleObject.type = type(pktlib.ipv4())
                         if words[idx] == "tcp":
-                            ruleObject.type = "tcp"
+                            ruleObject.type = type(pktlib.tcp())
                         if words[idx] == "udp":
-                            ruleObject.type = "udp"
+                            ruleObject.type = type(pktlib.udp())
                         if words[idx] == "icmp":
-                            ruleObject.type = "icmp"
+                            ruleObject.type = type(pktlib.icmp())
                         if words[idx] == "src":
-                            ruleObject.src = words[idx+1]
-                            if "/" in ruleObject.src:               #meaning its a net addr-we need the netmask
-                                temp = parse_cidr(ruleObject.src)
-                                srcnetMask = cidr_to_netmask(temp[1])
-                                ruleObject.netMask = srcnetMask
+                            if words[idx+1] == "any":
+                                ruleObject.src = 1
+                            else:
+                                ruleObject.src = words[idx+1]
+                                if "/" in ruleObject.src:               #meaning its a net addr-we need the netmask
+                                    temp = parse_cidr(ruleObject.src)
+                                    srcnetMask = cidr_to_netmask(temp[1])
+                                    ruleObject.netMask = srcnetMask
                         if words[idx] == "srcport":
-                            ruleObject.srcport = words[idx+1]
+                            if words[idx+1] == "any":
+                                ruleObject.srcport = 1
+                            else:
+                                ruleObject.srcport = words[idx+1]
                         if words[idx] == "dst":
-                            ruleObject.dst = words[idx+1]
+                            if words[idx+1] == "any":
+                                ruleObject.dst = 1
+                            else:
+                                ruleObject.dst = words[idx+1]
                         if words[idx] == "dstport":
-                            ruleObject.dstport = words[idx+1]
+                            if words[idx+1] == "any":
+                                ruleObject.dstport = 1
+                            else:
+                                ruleObject.dstport = words[idx+1]
                         if words[idx] == "ratelimit":
                             ruleObject.ratelimit = words[idx+1]
 
@@ -111,70 +121,70 @@ class Firewall(object):
             ruleObject = self.rules[i]
             print "CURRENT RULE-------------", ruleObject.line
             print "Payload : ", pkt.payload
+            print "PACKETTTT : ", pkt
+            print type(pkt)
+            if type(pkt) == type(pktlib.tcp()):
+                print "HOORAY!!!!"
+            if type(pkt) == type(pktlib.udp()):
+                print "HOORAY FOR UDPPPPPPP!!!!"
 
-            '''
-            check if ip/tcp/udp/icmp then check fields accordingly --
-            then do an all (one)(two)...
-            the all will only return True if all conditionals are true
+            print "NETMASKKK:  ", ruleObject.netMask
 
-            I THINK THE FEW LINES BELOW ARE ALL WE NEED...
-            as soon as we can figure out what type the packets are
-            '''
+            if (ruleObject.type == type(pkt)):
 
-            #pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
-            #if ip or icmp packet:
-                #return all(ruleObject.src == pktsrc, ruleObject.dst == pkt.dstip)  
+                if ruleObject.netMask != None:            
+                    pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
+                else:
+                    pktsrc = pkt.srcip
+                print "PKTSRCCCCCCCCCCCCC:  ", pktsrc
+                
+                if "/" in str(ruleObject.src):
+                    templist = []
+                    templist = ruleObject.src.split("/")
+                    rulesrc = IPAddr(templist[0])
+                    print "RULE SRCCCCCC:   ", type(rulesrc), rulesrc
+                else:   
+                    rulesrc = ruleObject.src 
+                    print "RULE SRCCCCCC:   ", type(rulesrc), rulesrc
 
-            #if tcp or udp packet:
-                #return all(ruleObject.src == pktsrc, ruleObject.dst == packet.dst, int(ruleObject.srcport) == int(pkt.payload.srcport), int(ruleObject.dstport) == int(pkt.payload.dstport))
-    
-            if ruleObject.type != 1:
-                if (ruleObject.type == "x"):
-                    print "HELL YA"
+                '''
+                    PROBLEM NOW IS HOW TO COMPARE THINGS
+                    WHERE THE RULE SAYS ANY -- CURRENTLY
+                    THATS SET TO 1 SO WE NEED TO FIGURE OUT 
+                    HOW TO COMPARE!!
 
-            #check IP src
-            if ruleObject.netMask != 1:
-                print ruleObject.netMask
-        
-                pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
-                if (ruleObject.src == pktsrc):
-                    print "SHOULD DENY THIS PACKET BECAUSE IT CAME FROM BANNED NETWORK"
-           
-            #check IP dst
-            if ruleObject.dst != 1:
-                print "yay"
-                print "ruleObject.dst:   ", ruleObject.dst
-                print "pkt.dstip:   ", pkt.dstip              
-                if (ruleObject.dst == pkt.dstip):
-                    print "MOTHER FUCKER!!!"                
+                '''
 
-            #check SRC port
-            if ruleObject.srcPort != 1:
-                print "HERE!!!!!"
-                print "ruleObject.port:   ", ruleObject.srcPort
-                print "pkt.payload.scrport:   ", pkt.payload.srcport
-                if (int(ruleObject.srcPort) == int(pkt.payload.srcport)):      #not sure why we have to typcast
-                    print "OMFG"
+                if type(pkt) == type(pktlib.ipv4()) or type(pkt) == type(pktlib.icmp()):
+                    print "SHOULD rEtuRn 11111111!!!!", (ruleObject.type == type(pkt))
+                    conditional1 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc), (ruleObject.dst == pkt.dstip)
+                    print (ruleObject.type == type(pkt))
+                    print (rulesrc == pktsrc)
+                    print (ruleObject.dst == pkt.dstip)
+                    print "OMG ITS THE END:::::::",  all(conditional1)  
+
+                print "type(ruleObject.src):   ", type(ruleObject.src), ruleObject.src
+                print "type(ruleObject.netMask):   ", type(ruleObject.netMask), ruleObject.netMask
+                print "type(pktsrc):   ", type(pktsrc)
+                print "PACKET TYPEEEEEEE:   ", type(pkt)
+                print "ruleObject.dst:   ", type(ruleObject.dst), ruleObject.dst
+                print type(pkt.dstip) #what's this supposed to be??
+                print "Object srcport : ", type(ruleObject.srcport)
+                print "PKT srcport : ", type(pkt.payload.srcport)
+                print "Object dstport : ", type(ruleObject.dstport)
+                print "PKT dstport : ", type(pkt.payload.dstport), pkt.payload.dstport
+
+                if type(pkt) == type(pktlib.tcp()) or type(pkt) == type(pktlib.udp()):
+                    print "SHOULD RetUrN 222222222!", (ruleObject.type == type(pkt))
+                    conditional2 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc), (ruleObject.dst == pkt.dstip), (int(ruleObject.srcport) == int(pkt.payload.srcport)), (int(ruleObject.dstport) == int(pkt.payload.dstport))
+                    print "OMG ITS THE END:::::::", all(conditional2)
+  
             
-            #check DST port
-            if ruleObject.dstPort != 1:
-                print "HERE!!!!!"
-                print "ruleObject.port:   ", ruleObject.srcPort
-                print "pkt.payload.scrport:   ", pkt.payload.srcport
-                if (int(ruleObject.dstport) == int(pkt.payload.dstport)):      #not sure why we have to typcast
-                    print "OMFG"
-
-            #need to check if permit or deny
-
-            #all will return true if all the conditionals are true
-            #all(ruleObject.src == pktsrc, ruleObject.dst == packet.dst, int(ruleObject.srcport) == int(pkt.payload.srcport), int(ruleObject.dstport) == int(pkt.payload.dstport))
-
-
 #testing!!
 def tests():
     f = Firewall()
-    ip = pktlib.tcp()
-    ip.srcip = IPAddr("192.168.42.1")
+    ip = pktlib.ipv4()
+    ip.srcip = IPAddr("172.16.42.1")
     ip.dstip = IPAddr("172.16.42.42")
     ip.protocol = 17
     xudp = pktlib.udp()
@@ -193,4 +203,5 @@ def tests():
 
 if __name__ == '__main__':
     tests()
+
 
