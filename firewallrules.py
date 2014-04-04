@@ -90,13 +90,6 @@ class Firewall(object):
                    
                     self.rules.append(ruleObject)
 
-                    #ruleObject.src = line[4]
-                    self.rules.append(ruleObject) #append object instead of list
-
-    #drop everything from a network that we don't trust
-    def bad(self):
-        pass
-
     def networkMatch(self, ip, network):
         netMask = cidr_to_netmask(network.toUnsigned()) #should create netMask
         result = IPAddr(ip.toUnsigned() & netmask.toUnsigned())
@@ -111,14 +104,30 @@ class Firewall(object):
 
         self.import_rules()
 
-        #for each rule, check the tcp or udp, src, dst, port,....
+        #for each rule, check the type, src, dst, port,....
         #if all are correct, move on
         print "pkt.srcport:    ", pkt.payload.srcport
         for i in range(0,len(self.rules)):
             ruleObject = self.rules[i]
-            print ruleObject.line
-            print pkt.payload
+            print "CURRENT RULE-------------", ruleObject.line
+            print "Payload : ", pkt.payload
 
+            '''
+            check if ip/tcp/udp/icmp then check fields accordingly --
+            then do an all (one)(two)...
+            the all will only return True if all conditionals are true
+
+            I THINK THE FEW LINES BELOW ARE ALL WE NEED...
+            as soon as we can figure out what type the packets are
+            '''
+
+            #pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
+            #if ip or icmp packet:
+                #return all(ruleObject.src == pktsrc, ruleObject.dst == pkt.dstip)  
+
+            #if tcp or udp packet:
+                #return all(ruleObject.src == pktsrc, ruleObject.dst == packet.dst, int(ruleObject.srcport) == int(pkt.payload.srcport), int(ruleObject.dstport) == int(pkt.payload.dstport))
+    
             if ruleObject.type != 1:
                 if (ruleObject.type == "x"):
                     print "HELL YA"
@@ -127,8 +136,8 @@ class Firewall(object):
             if ruleObject.netMask != 1:
                 print ruleObject.netMask
         
-                temp =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
-                if (ruleObject.src == temp):
+                pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
+                if (ruleObject.src == pktsrc):
                     print "SHOULD DENY THIS PACKET BECAUSE IT CAME FROM BANNED NETWORK"
            
             #check IP dst
@@ -152,19 +161,19 @@ class Firewall(object):
                 print "HERE!!!!!"
                 print "ruleObject.port:   ", ruleObject.srcPort
                 print "pkt.payload.scrport:   ", pkt.payload.srcport
-                if (int(ruleObject.srcPort) == int(pkt.payload.srcport)):      #not sure why we have to typcast
+                if (int(ruleObject.dstport) == int(pkt.payload.dstport)):      #not sure why we have to typcast
                     print "OMFG"
 
             #need to check if permit or deny
 
-            #needs to be something like:
-            #all(ruleObject.src == packet.src)(ruleObject.dst == packet.dst)(ruleObject.type = packet.type
+            #all will return true if all the conditionals are true
+            #all(ruleObject.src == pktsrc, ruleObject.dst == packet.dst, int(ruleObject.srcport) == int(pkt.payload.srcport), int(ruleObject.dstport) == int(pkt.payload.dstport))
 
 
 #testing!!
 def tests():
     f = Firewall()
-    ip = pktlib.ipv4()
+    ip = pktlib.tcp()
     ip.srcip = IPAddr("192.168.42.1")
     ip.dstip = IPAddr("172.16.42.42")
     ip.protocol = 17
