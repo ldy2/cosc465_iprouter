@@ -29,7 +29,7 @@ class Rules(object):
         self.netMask = None
         self.bucket = None
         
-        self.yes = None
+        self.yes = None  #I don't know what this is and don't use it anywhere
         
 
 class Firewall(object):
