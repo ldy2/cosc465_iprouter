@@ -27,7 +27,7 @@ class Rules(object):
         self.ratelimit = None
 
         self.netMask = None
-        self.bucket = None
+        self.bucket = 0
 
 
 class Firewall(object):
@@ -89,8 +89,6 @@ class Firewall(object):
 
   
     def networkMatch(self, ruleObject, pkt):
-        print ruleObject.type
-        print type(pkt)
         if (ruleObject.type == type(pkt)):
             if ruleObject.netMask != None:            
                 pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
@@ -102,22 +100,31 @@ class Firewall(object):
                 templist = ruleObject.src.split("/")
                 rulesrc = IPAddr(templist[0])
             else:   
-                rulesrc = ruleObject.src 
+                rulesrc = ruleObject.src
+
+            if "/" in str(ruleObject.dst):
+                templist = []
+                templist = ruleObject.dst.split("/")
+                ruledst = IPAddr(templist[0])
+            else:   
+                ruledst = ruleObject.dst 
 
             #first type: ipv4/icmp
             if type(pkt) == type(pktlib.ipv4()) or type(pkt) == type(pktlib.icmp()):
-                conditional1 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruleObject.dst == pkt.dstip or ruleObject.dst == 1)
+                conditional1 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruledst == pkt.dstip or ruledst == 1)
                 if ruleObject.ratelimit != None:
-                    conditional1a = conditional1 + (ruleObject.bucket >= len(pkt.pack()))
+
+                    conditional1a = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruledst == pkt.dstip or ruledst == 1), (ruleObject.bucket >= len(pkt.pack()))
                     return all(conditional1a)
                 else:                    
                     return  all(conditional1)   
           
             #second type: udp/tcp
             if type(pkt) == type(pktlib.tcp()) or type(pkt) == type(pktlib.udp()):
-                conditional2 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruleObject.dst == pkt.dstip or ruleObject.dst ==1), (int(ruleObject.srcport) == int(pkt.payload.srcport) or ruleObject.srcport == 1), (int(ruleObject.dstport) == int(pkt.payload.dstport) or ruleObject.dstport == 1)
+                conditional2 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), ((ruledst == 1) or (ruledst == pkt.dstip)), (int(ruleObject.srcport) == int(pkt.payload.srcport) or int(ruleObject.srcport) == 1), (int(ruleObject.dstport) == int(pkt.payload.dstport) or int(ruleObject.dstport) == 1)
+          
                 if ruleObject.ratelimit != None:
-                    conditional2a = conditional2 + (ruleObject.bucket >= len(pkt.pack()))
+                    conditional2a = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruledst == pkt.dstip or ruledst ==1), (int(ruleObject.srcport) == int(pkt.payload.srcport) or int(ruleObject.srcport) == 1), (int(ruleObject.dstport) == int(pkt.payload.dstport) or int(ruleObject.dstport) == 1), (ruleObject.bucket >= len(pkt.pack()))
                     return all(conditional2a)
                 else:
                     return all(conditional2)
@@ -128,20 +135,17 @@ class Firewall(object):
             ruleObject = self.rules[i]
             if ruleObject.ratelimit != None:
                 #some manipulation of the net.recv_packet() timeout value which I don't understand
-                #ruleObject.bucket += (ruleObject.ratelimit/2)
+                ruleObject.bucket += (int(ruleObject.ratelimit)/2)
 
 
     def allow(self, pkt):  #I don't know how to do the actions on the packets -- it tests correctly but then what?
-        self.import_rules()
+        #self.import_rules()
         for i in range(0,len(self.rules)):
             ruleObject = self.rules[i]
             result = self.networkMatch(ruleObject, pkt)
-            if result == True and ruleObject.action == "permit":
-                return result
-            if result == True and rule.Object.action == "deny":
-                print "NOPE"
-            else:
-                continue 
+            if result == True and ruleObject.action == "deny":
+                return False 
+        return True
 
 #testing!!
 def tests():
