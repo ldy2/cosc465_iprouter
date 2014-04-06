@@ -89,12 +89,13 @@ class Firewall(object):
 
   
     def networkMatch(self, ruleObject, pkt):
+        print ruleObject.type
+        print type(pkt)
         if (ruleObject.type == type(pkt)):
             if ruleObject.netMask != None:            
                 pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
             else:
                 pktsrc = pkt.srcip
-            
             #checks if it is a network address or not
             if "/" in str(ruleObject.src):
                 templist = []
@@ -126,23 +127,28 @@ class Firewall(object):
         for i in range(0,len(self.rules)):
             ruleObject = self.rules[i]
             if ruleObject.ratelimit != None:
-                print "UGHHHH: ", net.recv_packet()
+                #some manipulation of the net.recv_packet() timeout value which I don't understand
                 #ruleObject.bucket += (ruleObject.ratelimit/2)
 
 
-    def allow(self, pkt):
+    def allow(self, pkt):  #I don't know how to do the actions on the packets -- it tests correctly but then what?
         self.import_rules()
         for i in range(0,len(self.rules)):
             ruleObject = self.rules[i]
             result = self.networkMatch(ruleObject, pkt)
-            return result
+            if result == True and ruleObject.action == "permit":
+                return result
+            if result == True and rule.Object.action == "deny":
+                print "NOPE"
+            else:
+                continue 
 
 #testing!!
 def tests():
     f = Firewall()
-    ip = pktlib.ipv4()
-    ip.srcip = IPAddr("192.168.42.1")
-    ip.dstip = IPAddr("172.16.42.42")
+    ip = pktlib.tcp()
+    ip.srcip = IPAddr("172.16.42.42")
+    ip.dstip = IPAddr("192.128.42.42")
     ip.protocol = 17
     xudp = pktlib.udp()
     xudp.srcport = 80
