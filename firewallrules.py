@@ -85,106 +85,63 @@ class Firewall(object):
                         if words[idx] == "ratelimit":
                             ruleObject.ratelimit = words[idx+1]
 
-                    print #we can delete this once its all working
-                    print "************RULE OBJECT****************"  
-                    print ruleObject.line
-                    print ruleObject.action
-                    print ruleObject.type
-                    print ruleObject.src                    
-                    print ruleObject.srcport
-                    print ruleObject.dst
-                    print ruleObject.dstport
-                    print ruleObject.netMask
-                    print ruleObject.ratelimit
-                    print
-                   
                     self.rules.append(ruleObject)
 
-    def networkMatch(self, ip, network):
-        netMask = cidr_to_netmask(network.toUnsigned()) #should create netMask
-        result = IPAddr(ip.toUnsigned() & netmask.toUnsigned())
-        if result == network:
-            return True
-        else:
-            return False
+  
+    def networkMatch(self, ruleObject, pkt):
+        if (ruleObject.type == type(pkt)):
+            if ruleObject.netMask != None:            
+                pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
+            else:
+                pktsrc = pkt.srcip
+            
+            #checks if it is a network address or not
+            if "/" in str(ruleObject.src):
+                templist = []
+                templist = ruleObject.src.split("/")
+                rulesrc = IPAddr(templist[0])
+            else:   
+                rulesrc = ruleObject.src 
 
-    def allow(self, pkt):
-        print "ALLOW"
-        print "packet:    ", pkt
+            #first type: ipv4/icmp
+            if type(pkt) == type(pktlib.ipv4()) or type(pkt) == type(pktlib.icmp()):
+                conditional1 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruleObject.dst == pkt.dstip or ruleObject.dst == 1)
+                if ruleObject.ratelimit != None:
+                    conditional1a = conditional1 + (ruleObject.bucket >= len(pkt.pack()))
+                    return all(conditional1a)
+                else:                    
+                    return  all(conditional1)   
+          
+            #second type: udp/tcp
+            if type(pkt) == type(pktlib.tcp()) or type(pkt) == type(pktlib.udp()):
+                conditional2 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc or rulesrc == 1), (ruleObject.dst == pkt.dstip or ruleObject.dst ==1), (int(ruleObject.srcport) == int(pkt.payload.srcport) or ruleObject.srcport == 1), (int(ruleObject.dstport) == int(pkt.payload.dstport) or ruleObject.dstport == 1)
+                if ruleObject.ratelimit != None:
+                    conditional2a = conditional2 + (ruleObject.bucket >= len(pkt.pack()))
+                    return all(conditional2a)
+                else:
+                    return all(conditional2)
 
-        self.import_rules()
 
-        #for each rule, check the type, src, dst, port,....
-        #if all are correct, move on
-        print "pkt.srcport:    ", pkt.payload.srcport
+    def update_token_buckets(self):
         for i in range(0,len(self.rules)):
             ruleObject = self.rules[i]
-            print "CURRENT RULE-------------", ruleObject.line
-            print "Payload : ", pkt.payload
-            print "PACKETTTT : ", pkt
-            print type(pkt)
-            if type(pkt) == type(pktlib.tcp()):
-                print "HOORAY!!!!"
-            if type(pkt) == type(pktlib.udp()):
-                print "HOORAY FOR UDPPPPPPP!!!!"
+            if ruleObject.ratelimit != None:
+                print "UGHHHH: ", net.recv_packet()
+                #ruleObject.bucket += (ruleObject.ratelimit/2)
 
-            print "NETMASKKK:  ", ruleObject.netMask
 
-            if (ruleObject.type == type(pkt)):
+    def allow(self, pkt):
+        self.import_rules()
+        for i in range(0,len(self.rules)):
+            ruleObject = self.rules[i]
+            result = self.networkMatch(ruleObject, pkt)
+            return result
 
-                if ruleObject.netMask != None:            
-                    pktsrc =  IPAddr(ruleObject.netMask.toUnsigned() & pkt.srcip.toUnsigned())
-                else:
-                    pktsrc = pkt.srcip
-                print "PKTSRCCCCCCCCCCCCC:  ", pktsrc
-                
-                if "/" in str(ruleObject.src):
-                    templist = []
-                    templist = ruleObject.src.split("/")
-                    rulesrc = IPAddr(templist[0])
-                    print "RULE SRCCCCCC:   ", type(rulesrc), rulesrc
-                else:   
-                    rulesrc = ruleObject.src 
-                    print "RULE SRCCCCCC:   ", type(rulesrc), rulesrc
-
-                '''
-                    PROBLEM NOW IS HOW TO COMPARE THINGS
-                    WHERE THE RULE SAYS ANY -- CURRENTLY
-                    THATS SET TO 1 SO WE NEED TO FIGURE OUT 
-                    HOW TO COMPARE!!
-
-                '''
-
-                if type(pkt) == type(pktlib.ipv4()) or type(pkt) == type(pktlib.icmp()):
-                    print "SHOULD rEtuRn 11111111!!!!", (ruleObject.type == type(pkt))
-                    conditional1 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc), (ruleObject.dst == pkt.dstip)
-                    print (ruleObject.type == type(pkt))
-                    print (rulesrc == pktsrc)
-                    print (ruleObject.dst == pkt.dstip)
-                    print "OMG ITS THE END:::::::",  all(conditional1)  
-
-                print "type(ruleObject.src):   ", type(ruleObject.src), ruleObject.src
-                print "type(ruleObject.netMask):   ", type(ruleObject.netMask), ruleObject.netMask
-                print "type(pktsrc):   ", type(pktsrc)
-                print "PACKET TYPEEEEEEE:   ", type(pkt)
-                print "ruleObject.dst:   ", type(ruleObject.dst), ruleObject.dst
-                print type(pkt.dstip) #what's this supposed to be??
-                print "Object srcport : ", type(ruleObject.srcport)
-                print "PKT srcport : ", type(pkt.payload.srcport)
-                print "Object dstport : ", type(ruleObject.dstport)
-                print "PKT dstport : ", type(pkt.payload.dstport), pkt.payload.dstport
-
-                if type(pkt) == type(pktlib.tcp()) or type(pkt) == type(pktlib.udp()):
-                    print "SHOULD RetUrN 222222222!", (ruleObject.type == type(pkt))
-                    conditional2 = (ruleObject.type == type(pkt)), (rulesrc == pktsrc), (ruleObject.dst == pkt.dstip), (int(ruleObject.srcport) == int(pkt.payload.srcport)), (int(ruleObject.dstport) == int(pkt.payload.dstport))
-                    print "OMG ITS THE END:::::::", all(conditional2)
-  
-            
 #testing!!
 def tests():
     f = Firewall()
     ip = pktlib.ipv4()
-    ip.srcip = IPAddr("172.16.42.1")
+    ip.srcip = IPAddr("192.168.42.1")
     ip.dstip = IPAddr("172.16.42.42")
     ip.protocol = 17
     xudp = pktlib.udp()
