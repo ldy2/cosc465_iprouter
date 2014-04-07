@@ -11,7 +11,7 @@ import time
 sys.path.append(os.path.join(os.environ['HOME'],'pox'))
 sys.path.append(os.path.join(os.getcwd(),'pox'))
 import pox.lib.packet as pktlib
-import firewallrules.py
+
 
 from pox.lib.packet import ethernet,ETHER_BROADCAST,IP_ANY
 from pox.lib.packet import arp
@@ -117,12 +117,14 @@ class Router(object):
         self.interfaces()
     
         firewallrules.import_rules()        
-        
+
         while True:
             try:
-                dev,ts,pkt = self.net.recv_packet(timeout=1.0)
+                dev,ts,pkt = self.net.recv_packet(timeout=0.5)
             except SrpyNoPackets:
                 #log_debug("Timeout waiting for packets")
+                update_token_bucket()
+
                 toDel = []
                 icmpError = False
                 for key in self.queue:                                                          #iterate packetObjects in the queue
@@ -207,160 +209,162 @@ class Router(object):
                     print "Error."                                                  #drop packet since not valid ARP-packet
 
             else:
-                #if IPv4 packet----------------------------------
-                ip_header = pkt.find("ipv4")
-                icmpError = False
-                if ip_header != None:                                                   #if IPv4packet! 
-                    if ip_header.ttl == 1:                                               #AF: if TTL value is 0
-                        #create IP reply
-                        ipreply = pktlib.ipv4()
-                        interface = self.net.interface_by_name(dev)
-                        devIP = interface.ipaddr 
-                        ipreply.srcip = devIP           
-                        ipreply.dstip = pkt.payload.srcip 
-                        ipreply.ttl = 64
-
-                        #create ICMPpkt
-                        icmppkt = pktlib.icmp()
-                        icmppkt.type = pktlib.TYPE_TIME_EXCEED
-                        icmppkt.payload = pktlib.unreach()
-                        icmppkt.payload.payload = pkt.dump()[:28]
-
-                        #link the two
-                        ipreply.protocol = ipreply.ICMP_PROTOCOL
-                        ipreply.payload = icmppkt
-                        icmpError = True
-                        
-                    ip_header.ttl -= 1
-                    dstIP = ip_header.dstip                                             #destination IP addr of IPheader
-                    srcIP = ip_header.srcip
-                    interface = self.net.interface_by_name(dev)
-                    devIP = interface.ipaddr 
-
-                    #packet sent to me-------------------------------------  
-                    sentToMe = False
-                    for intf in self.net.interfaces():
-                        if dstIP == intf.ipaddr:
-                            sentToMe = True 
-                    if sentToMe:                                                      #if packet is for me
-                        icmp_header = pkt.find("icmp")
-                        if icmp_header != None:                                 #need this to check if ping...not just ICMP
-                            oldPing = icmp_header.payload
-                            #creat ICMP reply to send out
-                            icmppkt = pktlib.icmp()                                                #create ICMP header
-                            icmppkt.type = pktlib.TYPE_ECHO_REPLY
-                            ping = pktlib.echo()
-                            ping.id = oldPing.id 
-                            ping.seq = oldPing.seq 
-                            ping.payload = oldPing.payload
-                            icmppkt.payload = ping
-                            #create IP header
-                            ipreply = pktlib.ipv4()
-                            ipreply.srcip = devIP
-                            ipreply.dstip = srcIP
-                            ipreply.ttl = 64
-                            ipreply.payload = icmppkt
-                            ipreply.protocol = 1  
-                            self.icmpError(ipreply, pkt, dev, self.net, ip_header)
-                        else:
+                x = firewallrules.allow(pkt)
+                if x== True:
+                    #if IPv4 packet----------------------------------
+                    ip_header = pkt.find("ipv4")
+                    icmpError = False
+                    if ip_header != None:                                                   #if IPv4packet! 
+                        if ip_header.ttl == 1:                                               #AF: if TTL value is 0
+                            #create IP reply
                             ipreply = pktlib.ipv4()
                             interface = self.net.interface_by_name(dev)
-                            devIP = interface.ipaddr
-                            ipreply.srcip = devIP  
-                            ipreply.dstip = ip_header.srcip 
-                            ipreply.ttl = 65
+                            devIP = interface.ipaddr 
+                            ipreply.srcip = devIP           
+                            ipreply.dstip = pkt.payload.srcip 
+                            ipreply.ttl = 64
 
                             #create ICMPpkt
                             icmppkt = pktlib.icmp()
-                            icmppkt.type = pktlib.TYPE_DEST_UNREACH
-                            icmppkt.code = pktlib.CODE_UNREACH_PORT 
+                            icmppkt.type = pktlib.TYPE_TIME_EXCEED
                             icmppkt.payload = pktlib.unreach()
                             icmppkt.payload.payload = pkt.dump()[:28]
 
                             #link the two
                             ipreply.protocol = ipreply.ICMP_PROTOCOL
-                            ipreply.set_payload(icmppkt)
+                            ipreply.payload = icmppkt
+                            icmpError = True
+                            
+                        ip_header.ttl -= 1
+                        dstIP = ip_header.dstip                                             #destination IP addr of IPheader
+                        srcIP = ip_header.srcip
+                        interface = self.net.interface_by_name(dev)
+                        devIP = interface.ipaddr 
 
-                            self.icmpError(ipreply, pkt, dev, self.net,ip_header)
+                        #packet sent to me-------------------------------------  
+                        sentToMe = False
+                        for intf in self.net.interfaces():
+                            if dstIP == intf.ipaddr:
+                                sentToMe = True 
+                        if sentToMe:                                                      #if packet is for me
+                            icmp_header = pkt.find("icmp")
+                            if icmp_header != None:                                 #need this to check if ping...not just ICMP
+                                oldPing = icmp_header.payload
+                                #creat ICMP reply to send out
+                                icmppkt = pktlib.icmp()                                                #create ICMP header
+                                icmppkt.type = pktlib.TYPE_ECHO_REPLY
+                                ping = pktlib.echo()
+                                ping.id = oldPing.id 
+                                ping.seq = oldPing.seq 
+                                ping.payload = oldPing.payload
+                                icmppkt.payload = ping
+                                #create IP header
+                                ipreply = pktlib.ipv4()
+                                ipreply.srcip = devIP
+                                ipreply.dstip = srcIP
+                                ipreply.ttl = 64
+                                ipreply.payload = icmppkt
+                                ipreply.protocol = 1  
+                                self.icmpError(ipreply, pkt, dev, self.net, ip_header)
+                            else:
+                                ipreply = pktlib.ipv4()
+                                interface = self.net.interface_by_name(dev)
+                                devIP = interface.ipaddr
+                                ipreply.srcip = devIP  
+                                ipreply.dstip = ip_header.srcip 
+                                ipreply.ttl = 65
 
-                    #print packet not sent to me------------------------------------------
-                    else:                                                                   #if packet is not for me
-                        bestKey = self.in_forwarding_table(ip_header)
+                                #create ICMPpkt
+                                icmppkt = pktlib.icmp()
+                                icmppkt.type = pktlib.TYPE_DEST_UNREACH
+                                icmppkt.code = pktlib.CODE_UNREACH_PORT 
+                                icmppkt.payload = pktlib.unreach()
+                                icmppkt.payload.payload = pkt.dump()[:28]
 
-                        if bestKey != None:                                                 #checks if a match in forwarding table
-                            if self.forwardingTable[bestKey][1]==None:                      #checks if nextHop none-directly reachable
-                                if dstIP in self.MACaddresses:                              #checks if already know MAC addr
-                                    srcINTR = self.forwardingTable[bestKey][2]              #get own mac address with ^
-                                    interface = self.net.interface_by_name(srcINTR)         #get own mac address
-                                    srcMAC = interface.ethaddr
-                                    dstMAC = self.MACaddresses[dstIP]                       #gets MACaddr for dstIP
-                                    packet = self.create_eth_header(pkt, dstMAC, srcMAC)    #creates new packet to send
-                                    dev = self.forwardingTable[bestKey][2]                  #gets net interface name for dstIP
-                                    self.net.send_packet(dev,packet)                        #sends IPv4packet
+                                #link the two
+                                ipreply.protocol = ipreply.ICMP_PROTOCOL
+                                ipreply.set_payload(icmppkt)
 
-                                else:                                                       #if don't know mac addr
-                                    IPinfo = self.forwardingTable[bestKey]
-                                    packetObject = packets()
-                                    packetObject.pkt = pkt
-                                    packetObject.ip_header = ip_header
-                                    packetObject.lastSend = time.time()
-                                    self.queue[dstIP] = packetObject 
-                                    packet = self.create_arp_request(ip_header, packetObject, IPinfo, dstIP)   #creates packet 
-                                    dev = IPinfo[2]                                                     #dev is the interface to send on
-                                    packetObject.dev = dev
-                                    self.net.send_packet(dev,packet)                                    #send request
-                                                                              
-                            else:                                                                       #if next HOP is not None
-                                IPinfo = self.forwardingTable[bestKey]
-                                nextHopIP = self.forwardingTable[bestKey][1]
-                                nextHopDev = self.forwardingTable[bestKey][2]
-                                if nextHopIP in self.MACaddresses:                                      #if already know MAC address
-                                    srcINTR = self.forwardingTable[bestKey][2]                          #get own mac address with ^
-                                    interface = self.net.interface_by_name(srcINTR)                     #get own mac address
-                                    srcMAC = interface.ethaddr
-                                    dstMAC = self.MACaddresses[dstIP]                                   #gets MACaddr for dstIP
-                                    packet = self.create_eth_header(pkt, dstMAC, srcMAC)                #creates new packet to send
-                                    dev = self.forwardingTable[bestKey][2]                              #gets netinterface name for dstIP
-                                    self.net.send_packet(packetObject.dev, packetObject.ARP_request)    #sends IPv4packet 
-                                   
-                                else:                                                               #If don't know MAC address
-                                    if icmpError:
-                                        self.icmpError(ipreply, pkt, dev, self.net,ip_header) #send
-                                    else:
+                                self.icmpError(ipreply, pkt, dev, self.net,ip_header)
+
+                        #print packet not sent to me------------------------------------------
+                        else:                                                                   #if packet is not for me
+                            bestKey = self.in_forwarding_table(ip_header)
+
+                            if bestKey != None:                                                 #checks if a match in forwarding table
+                                if self.forwardingTable[bestKey][1]==None:                      #checks if nextHop none-directly reachable
+                                    if dstIP in self.MACaddresses:                              #checks if already know MAC addr
+                                        srcINTR = self.forwardingTable[bestKey][2]              #get own mac address with ^
+                                        interface = self.net.interface_by_name(srcINTR)         #get own mac address
+                                        srcMAC = interface.ethaddr
+                                        dstMAC = self.MACaddresses[dstIP]                       #gets MACaddr for dstIP
+                                        packet = self.create_eth_header(pkt, dstMAC, srcMAC)    #creates new packet to send
+                                        dev = self.forwardingTable[bestKey][2]                  #gets net interface name for dstIP
+                                        self.net.send_packet(dev,packet)                        #sends IPv4packet
+
+                                    else:                                                       #if don't know mac addr
+                                        IPinfo = self.forwardingTable[bestKey]
                                         packetObject = packets()
                                         packetObject.pkt = pkt
                                         packetObject.ip_header = ip_header
                                         packetObject.lastSend = time.time()
-                                        self.queue[ip_header.srcip] = packetObject 
-                                        packet = self.create_arp_request(ip_header, packetObject, IPinfo, nextHopIP)   
+                                        self.queue[dstIP] = packetObject 
+                                        packet = self.create_arp_request(ip_header, packetObject, IPinfo, dstIP)   #creates packet 
+                                        dev = IPinfo[2]                                                     #dev is the interface to send on
                                         packetObject.dev = dev
-                                        packet.payload.protosrc = ipreply.srcip
-                                        packet.payload.protodst = ip_header.srcip
-                                        packet.src = pkt.dst
-                                        packet.payload.hwsrc = pkt.dst
-                                        self.net.send_packet(dev, packetObject.ARP_request)              #send request
-               
-                        else:                 
-                            ipreply = pktlib.ipv4()
-                            interface = self.net.interface_by_name(dev)
-                            devIP = interface.ipaddr
-                            ipreply.srcip = devIP  
-                            ipreply.dstip = ip_header.srcip             #send back to source of packet that had TTL of 1
-                            ipreply.ttl = 65
+                                        self.net.send_packet(dev,packet)                                    #send request
+                                                                                  
+                                else:                                                                       #if next HOP is not None
+                                    IPinfo = self.forwardingTable[bestKey]
+                                    nextHopIP = self.forwardingTable[bestKey][1]
+                                    nextHopDev = self.forwardingTable[bestKey][2]
+                                    if nextHopIP in self.MACaddresses:                                      #if already know MAC address
+                                        srcINTR = self.forwardingTable[bestKey][2]                          #get own mac address with ^
+                                        interface = self.net.interface_by_name(srcINTR)                     #get own mac address
+                                        srcMAC = interface.ethaddr
+                                        dstMAC = self.MACaddresses[dstIP]                                   #gets MACaddr for dstIP
+                                        packet = self.create_eth_header(pkt, dstMAC, srcMAC)                #creates new packet to send
+                                        dev = self.forwardingTable[bestKey][2]                              #gets netinterface name for dstIP
+                                        self.net.send_packet(packetObject.dev, packetObject.ARP_request)    #sends IPv4packet 
+                                       
+                                    else:                                                               #If don't know MAC address
+                                        if icmpError:
+                                            self.icmpError(ipreply, pkt, dev, self.net,ip_header) #send
+                                        else:
+                                            packetObject = packets()
+                                            packetObject.pkt = pkt
+                                            packetObject.ip_header = ip_header
+                                            packetObject.lastSend = time.time()
+                                            self.queue[ip_header.srcip] = packetObject 
+                                            packet = self.create_arp_request(ip_header, packetObject, IPinfo, nextHopIP)   
+                                            packetObject.dev = dev
+                                            packet.payload.protosrc = ipreply.srcip
+                                            packet.payload.protodst = ip_header.srcip
+                                            packet.src = pkt.dst
+                                            packet.payload.hwsrc = pkt.dst
+                                            self.net.send_packet(dev, packetObject.ARP_request)              #send request
+                   
+                            else:                 
+                                ipreply = pktlib.ipv4()
+                                interface = self.net.interface_by_name(dev)
+                                devIP = interface.ipaddr
+                                ipreply.srcip = devIP  
+                                ipreply.dstip = ip_header.srcip             #send back to source of packet that had TTL of 1
+                                ipreply.ttl = 65
 
-                            #create ICMPpkt
-                            icmppkt = pktlib.icmp()
-                            icmppkt.type = pktlib.TYPE_DEST_UNREACH
-                            icmppkt.code = pktlib.CODE_UNREACH_NET 
-                            icmppkt.payload = pktlib.unreach()
-                            icmppkt.payload.payload = pkt.dump()[:28]
+                                #create ICMPpkt
+                                icmppkt = pktlib.icmp()
+                                icmppkt.type = pktlib.TYPE_DEST_UNREACH
+                                icmppkt.code = pktlib.CODE_UNREACH_NET 
+                                icmppkt.payload = pktlib.unreach()
+                                icmppkt.payload.payload = pkt.dump()[:28]
 
-                            #link the two
-                            ipreply.protocol = ipreply.ICMP_PROTOCOL
-                            ipreply.set_payload(icmppkt)
+                                #link the two
+                                ipreply.protocol = ipreply.ICMP_PROTOCOL
+                                ipreply.set_payload(icmppkt)
 
-                            #print "entering ICMP Error area"		
-                            self.icmpError(ipreply, pkt, dev, self.net,ip_header)
+                                #print "entering ICMP Error area"		
+                                self.icmpError(ipreply, pkt, dev, self.net,ip_header)
                               
     def icmpError(self, ipreply, pkt, dev, net, ip_header):
         bestKey = self.in_forwarding_table(ipreply)
